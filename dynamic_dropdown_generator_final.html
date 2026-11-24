@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XLSX Dynamic Dropdowns</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS/xlsx library for reading Excel files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #d1d5db; }
+        .file-input-button {
+            background-color: #4f46e5; color: white; padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem; cursor: pointer; transition: background-color 0.2s;
+            font-weight: 500; display: inline-block;
+        }
+        .file-input-button:hover { background-color: #4338ca; }
+        input[type="file"] { display: none; }
+        select {
+            -webkit-appearance: none; -moz-appearance: none; appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat; background-position: right 0.7rem center;
+            background-size: 0.65rem auto; padding-right: 2.5rem;
+            background-color: #1f2937; border-color: #4b5563; color: #d1d5db;
+        }
+        #generated-text-output { cursor: pointer; transition: background-color 0.2s; word-break: break-all; background-color: #374151; border-color: #4b5563; color: #e5e7eb; }
+        #generated-text-output:hover { background-color: #4b5563; }
+        .draggable-item { cursor: move; user-select: none; background-color: #374151; border-color: #4b5563; }
+        .draggable-item.dragging { opacity: 0.5; background-color: #4f46e5; }
+
+        /* Light theme styles */
+        html.light body { background-color: #f3f4f6; color: #1f2937; }
+        html.light .bg-gray-800 { background-color: #ffffff; border: 1px solid #e5e7eb; }
+        html.light .text-white { color: #1f2937; }
+        html.light .text-gray-300 { color: #374151; }
+        html.light .text-gray-400 { color: #6b7280; }
+        html.light .text-gray-500 { color: #6b7280; }
+        html.light .border-gray-600 { border-color: #d1d5db; }
+        html.light .border-gray-700 { border-color: #d1d5db; }
+        html.light select { background-color: #ffffff; border-color: #d1d5db; color: #1f2937; }
+        html.light #generated-text-output { background-color: #f9fafb; border-color: #d1d5db; color: #1f2937; }
+        html.light .draggable-item { background-color: #f9fafb; border-color: #d1d5db; }
+        html.light .dot { transform: translateX(1.5rem); }
+        html.light .custom-text-input { background-color: #ffffff; border-color: #d1d5db; color: #1f2937; }
+        html.light .custom-text-input::placeholder { color: #9ca3af; }
+        html.light .edit-order-button { background-color: #e5e7eb; color: #1f2937; }
+        html.light .edit-order-button:hover { background-color: #d1d5db; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="absolute top-4 right-4">
+        <label for="theme-toggle" class="flex items-center cursor-pointer">
+            <div class="relative">
+                <input type="checkbox" id="theme-toggle" class="sr-only">
+                <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform"></div>
+            </div>
+        </label>
+    </div>
+
+    <div class="w-full max-w-4xl mx-auto bg-gray-800 p-8 rounded-xl shadow-lg">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white">Data Entries Generator for Automation Scripts</h1>
+            <p class="text-gray-400 mt-2">Upload an .xlsx file to generate dropdowns based on its content.</p>
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="text-center mb-8">
+            <label for="file-upload" class="file-input-button">Select .xlsx File</label>
+            <input id="file-upload" type="file" accept=".xlsx, .xls">
+            <p id="file-name" class="mt-4 text-sm text-gray-500">No file selected.</p>
+        </div>
+
+        <!-- Main content area -->
+        <div id="content-area" class="hidden space-y-8">
+            <!-- Common Dropdowns -->
+            <div id="common-dropdowns-container">
+                <h2 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-gray-300">Common Options</h2>
+                <div id="common-dropdowns" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            </div>
+
+            <!-- Country-Specific Dropdowns -->
+            <div id="country-dropdowns-container">
+                <h2 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-gray-300">Country-Specific Options</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label for="country-select" class="block text-sm font-medium text-gray-400 mb-1">Country</label>
+                        <select id="country-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="workflow-type-select" class="block text-sm font-medium text-gray-400 mb-1">Workflow Type</label>
+                        <select id="workflow-type-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="workflow-subtype-select" class="block text-sm font-medium text-gray-400 mb-1">Workflow Sub-Type</label>
+                        <select id="workflow-subtype-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"></select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generated Text Output Section -->
+            <div id="generated-text-container" class="hidden">
+                <div class="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
+                    <h2 class="text-xl font-semibold text-gray-300">Generated Output</h2>
+                    <button id="edit-order-btn" class="edit-order-button text-sm bg-gray-600 hover:bg-gray-700 text-gray-200 font-semibold py-2 px-4 rounded-lg">Edit Order</button>
+                </div>
+                <div class="relative">
+                    <p id="generated-text-output" class="p-4 bg-gray-900 border border-gray-600 rounded-md text-gray-300 font-mono text-sm"></p>
+                    <span id="copy-feedback" class="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full opacity-0 transition-opacity duration-300">Copied!</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-2 text-center">Click the text above to copy to clipboard.</p>
+            </div>
+        </div>
+
+        <!-- Initial placeholder -->
+        <div id="placeholder" class="text-center py-12 border-2 border-dashed border-gray-600 rounded-lg">
+            <p class="text-gray-500">Dropdowns will appear here after you upload a file.</p>
+        </div>
+    </div>
+
+    <!-- Edit Order Modal -->
+    <div id="edit-order-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-gray-800 border-gray-700">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-white">Edit Output Order</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-400 mb-4">Drag and drop the items to reorder them.</p>
+                    <div id="reorder-list" class="space-y-2 text-left"></div>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="save-order-btn" class="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">Save Order</button>
+                    <button id="cancel-order-btn" class="mt-2 px-4 py-2 bg-gray-700 text-gray-300 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const fileUpload = document.getElementById('file-upload'), fileNameDisplay = document.getElementById('file-name');
+        const contentArea = document.getElementById('content-area'), placeholder = document.getElementById('placeholder');
+        const commonDropdownsContainer = document.getElementById('common-dropdowns');
+        const countrySelect = document.getElementById('country-select'), workflowTypeSelect = document.getElementById('workflow-type-select'), workflowSubtypeSelect = document.getElementById('workflow-subtype-select');
+        const generatedTextContainer = document.getElementById('generated-text-container'), generatedTextOutput = document.getElementById('generated-text-output'), copyFeedback = document.getElementById('copy-feedback');
+        const editOrderBtn = document.getElementById('edit-order-btn'), editOrderModal = document.getElementById('edit-order-modal');
+        const saveOrderBtn = document.getElementById('save-order-btn'), cancelOrderBtn = document.getElementById('cancel-order-btn');
+        const reorderList = document.getElementById('reorder-list');
+
+        // --- Global State ---
+        let countryWorkflowData = {};
+        let fieldOrder = []; // To store the order of fields for the output string
+        let dropdownElements = {}; // To map field labels to their select elements
+        let fieldVisibility = {}; // To track visibility of each field
+
+        // --- Event Listeners ---
+        fileUpload.addEventListener('change', handleFile);
+        countrySelect.addEventListener('change', () => { handleCountryChange(); updateGeneratedText(); });
+        workflowTypeSelect.addEventListener('change', () => { handleWorkflowTypeChange(); updateGeneratedText(); });
+        workflowSubtypeSelect.addEventListener('change', updateGeneratedText);
+        generatedTextOutput.addEventListener('click', copyGeneratedTextToClipboard);
+        editOrderBtn.addEventListener('click', openEditOrderModal);
+        cancelOrderBtn.addEventListener('click', () => editOrderModal.classList.add('hidden'));
+        saveOrderBtn.addEventListener('click', saveNewOrder);
+
+        /** Main file handler */
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            fileNameDisplay.textContent = `File: ${file.name}`;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    processWorkbook(workbook);
+                    contentArea.classList.remove('hidden');
+                    placeholder.classList.add('hidden');
+                    generatedTextContainer.classList.remove('hidden');
+                    updateGeneratedText();
+                } catch (error) {
+                    console.error("Error processing XLSX file:", error);
+                    fileNameDisplay.textContent = "Error: Could not read the file.";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /** Processes the workbook, populates UI and sets initial order */
+        function processWorkbook(workbook) {
+            resetUI();
+            const sheetNames = workbook.SheetNames;
+            if (sheetNames.length === 0) return;
+
+            // Define static fields and their elements
+            dropdownElements = {
+                'Country': countrySelect,
+                'Workflow Type': workflowTypeSelect,
+                'Workflow Sub-Type': workflowSubtypeSelect,
+            };
+
+            const commonSheet = workbook.Sheets[sheetNames[0]];
+            if (commonSheet) processCommonSheet(commonSheet);
+
+            const countrySheetNames = sheetNames.slice(1);
+            if (countrySheetNames.length > 0) {
+                processCountrySheets(workbook, countrySheetNames);
+                populateCountryDropdown(countrySheetNames);
+                handleCountryChange();
+            }
+
+            // Set the initial field order based on the UI structure
+            fieldOrder = [
+                'Country',
+                ...Object.keys(dropdownElements).filter(k => !['Country', 'Workflow Type', 'Workflow Sub-Type'].includes(k)),
+                'Workflow Type',
+                'Workflow Sub-Type'
+            ];
+            fieldOrder.forEach(field => fieldVisibility[field] = true); // Initialize all as visible
+        }
+
+        /** Parses 'common' sheet, creates dropdowns or textboxes, and maps them */
+        function processCommonSheet(sheet) {
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0 || !row[0]) continue;
+                const labelText = row[0];
+                const options = row.slice(1).filter(opt => opt !== null && String(opt).trim() !== '');
+
+                if (options.length === 1 && options[0].toLowerCase() === 'text box') {
+                    const inputElement = createTextInput(commonDropdownsContainer, labelText, updateGeneratedText);
+                    dropdownElements[labelText] = inputElement;
+                } else if (options.length > 0) {
+                    const selectElement = createDropdown(commonDropdownsContainer, labelText, options, updateGeneratedText);
+                    dropdownElements[labelText] = selectElement; // Map label to element
+                }
+            }
+        }
+        
+        /** Gathers all selected values based on fieldOrder and updates the output text */
+        function updateGeneratedText() {
+            const allValues = fieldOrder
+                .filter(fieldLabel => fieldVisibility[fieldLabel]) // Only include visible fields
+                .map(fieldLabel => {
+                    const element = dropdownElements[fieldLabel];
+                    return element ? element.value : '';
+                }).filter(v => v); // Filter out any empty values
+
+            const formattedString = `| ${allValues.join(' | ')} |`;
+            generatedTextOutput.textContent = formattedString;
+        }
+
+        /** Opens the modal and populates it with draggable items based on current field order */
+        function openEditOrderModal() {
+            reorderList.innerHTML = ''; // Clear previous list
+            fieldOrder.forEach(field => {
+                const item = document.createElement('div');
+                item.className = 'draggable-item bg-gray-700 p-3 rounded-md border border-gray-600 flex items-center justify-between';
+                item.setAttribute('draggable', true);
+
+                const label = document.createElement('span');
+                label.textContent = field;
+                item.appendChild(label);
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = fieldVisibility[field] !== false; // Default to true
+                checkbox.className = 'form-checkbox h-5 w-5 text-indigo-500 transition duration-150 ease-in-out bg-gray-800 border-gray-600';
+                
+                item.appendChild(checkbox);
+                reorderList.appendChild(item);
+            });
+            addDragAndDropListeners();
+            editOrderModal.classList.remove('hidden');
+        }
+
+        /** Saves the new order from the modal */
+        function saveNewOrder() {
+            const newOrder = [];
+            reorderList.querySelectorAll('.draggable-item').forEach(item => {
+                const field = item.querySelector('span').textContent;
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                newOrder.push(field);
+                fieldVisibility[field] = checkbox.checked;
+            });
+
+            fieldOrder = newOrder;
+            updateGeneratedText();
+            editOrderModal.classList.add('hidden');
+        }
+
+        /** Adds drag-and-drop event listeners to items in the reorder list */
+        function addDragAndDropListeners() {
+            const draggables = reorderList.querySelectorAll('.draggable-item');
+            let draggedItem = null;
+
+            draggables.forEach(draggable => {
+                draggable.addEventListener('dragstart', () => {
+                    draggedItem = draggable;
+                    setTimeout(() => draggable.classList.add('dragging'), 0);
+                });
+
+                draggable.addEventListener('dragend', () => {
+                    draggable.classList.remove('dragging');
+                    draggedItem = null;
+                });
+            });
+
+            reorderList.addEventListener('dragover', e => {
+                e.preventDefault();
+                const afterElement = getDragAfterElement(reorderList, e.clientY);
+                if (afterElement == null) {
+                    reorderList.appendChild(draggedItem);
+                } else {
+                    reorderList.insertBefore(draggedItem, afterElement);
+                }
+            });
+        }
+
+        /** Helper function to determine where to drop the dragged item */
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.draggable-item:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+        
+        /** Copies the generated text to the clipboard */
+        function copyGeneratedTextToClipboard() {
+            const textToCopy = generatedTextOutput.textContent;
+            if (!textToCopy) return;
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyFeedback.classList.remove('opacity-0');
+                setTimeout(() => copyFeedback.classList.add('opacity-0'), 1500);
+            } catch (err) { console.error('Failed to copy text: ', err); }
+            document.body.removeChild(textArea);
+        }
+
+        // --- Utility and other functions from previous version (unchanged or minor tweaks) ---
+        function processCountrySheets(workbook, countrySheetNames) {
+            countryWorkflowData = {};
+            countrySheetNames.forEach(name => {
+                const sheet = workbook.Sheets[name];
+                const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                if (sheetData.length > 0) {
+                    const headers = sheetData[0];
+                    const workflows = {};
+                    let currentWorkflowType = null;
+
+                    for (let i = 1; i < sheetData.length; i++) {
+                        const row = sheetData[i];
+                        if (!row) continue;
+                        const typeCell = row[0] ? String(row[0]).trim() : null;
+                        const subtypeCell = row[1] ? String(row[1]).trim() : null;
+
+                        if (typeCell) {
+                            currentWorkflowType = typeCell;
+                            workflows[currentWorkflowType] = [];
+                        }
+                        if (subtypeCell && currentWorkflowType) {
+                            workflows[currentWorkflowType].push(subtypeCell);
+                        }
+                    }
+                    countryWorkflowData[name] = { headers: headers, workflows: workflows };
+                }
+            });
+        }
+        function populateCountryDropdown(countryNames) { populateSelect(countrySelect, countryNames); }
+        function handleCountryChange() {
+            const selectedCountry = countrySelect.value;
+            if (!selectedCountry || !countryWorkflowData[selectedCountry]) {
+                clearSelect(workflowTypeSelect);
+                clearSelect(workflowSubtypeSelect);
+                return;
+            }
+
+            const countryData = countryWorkflowData[selectedCountry];
+            const headers = countryData.headers;
+            const workflowTypes = Object.keys(countryData.workflows);
+
+            // Update labels
+            const workflowTypeLabel = document.querySelector('label[for="workflow-type-select"]');
+            if (workflowTypeLabel && headers[0]) {
+                workflowTypeLabel.textContent = headers[0];
+            }
+
+            const workflowSubtypeLabel = document.querySelector('label[for="workflow-subtype-select"]');
+            if (workflowSubtypeLabel && headers[1]) {
+                workflowSubtypeLabel.textContent = headers[1];
+            }
+
+            populateSelect(workflowTypeSelect, workflowTypes);
+            handleWorkflowTypeChange();
+        }
+        function handleWorkflowTypeChange() {
+            const selectedCountry = countrySelect.value;
+            const selectedType = workflowTypeSelect.value;
+            if (!selectedCountry || !selectedType || !countryWorkflowData[selectedCountry] || !countryWorkflowData[selectedCountry].workflows[selectedType]) {
+                clearSelect(workflowSubtypeSelect);
+                return;
+            }
+            const subtypes = countryWorkflowData[selectedCountry].workflows[selectedType];
+            populateSelect(workflowSubtypeSelect, subtypes);
+        }
+        function createDropdown(container, labelText, options, changeCallback) {
+            const wrapper = document.createElement('div');
+            const label = document.createElement('label');
+            label.textContent = labelText;
+            label.className = 'block text-sm font-medium text-gray-400 mb-1';
+
+            const select = document.createElement('select');
+            select.className = 'mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm';
+            populateSelect(select, options);
+            if (changeCallback) { select.addEventListener('change', changeCallback); }
+            
+            wrapper.appendChild(label);
+            wrapper.appendChild(select);
+            container.appendChild(wrapper);
+            return select;
+        }
+
+        function createTextInput(container, labelText, changeCallback) {
+            const wrapper = document.createElement('div');
+            const label = document.createElement('label');
+            label.textContent = labelText;
+            label.className = 'block text-sm font-medium text-gray-400 mb-1';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'custom-text-input mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm';
+            if (changeCallback) { input.addEventListener('input', changeCallback); }
+
+            wrapper.appendChild(label);
+            wrapper.appendChild(input);
+            container.appendChild(wrapper);
+            return input;
+        }
+
+        function populateSelect(selectElement, options) { /* ... same as before ... */
+            clearSelect(selectElement); if (!options || options.length === 0) {
+                const defaultOption = document.createElement('option'); defaultOption.textContent = "No options available";
+                defaultOption.disabled = true; selectElement.appendChild(defaultOption);
+            } else {
+                options.forEach(opt => {
+                    const option = document.createElement('option'); option.value = opt; option.textContent = opt;
+                    selectElement.appendChild(option);
+                });
+            }
+        }
+        function clearSelect(selectElement) { selectElement.innerHTML = ''; }
+        function resetUI() {
+            commonDropdownsContainer.innerHTML = ''; clearSelect(countrySelect); clearSelect(workflowTypeSelect);
+            clearSelect(workflowSubtypeSelect); countryWorkflowData = {}; fieldOrder = []; dropdownElements = {};
+            fieldVisibility = {};
+            generatedTextContainer.classList.add('hidden'); generatedTextOutput.textContent = '';
+        }
+
+        // --- Theme Switcher ---
+        const themeToggle = document.getElementById('theme-toggle');
+        const htmlElement = document.documentElement;
+
+        function applyTheme(theme) {
+            if (theme === 'light') {
+                htmlElement.classList.add('light');
+                themeToggle.checked = true;
+            } else {
+                htmlElement.classList.remove('light');
+                themeToggle.checked = false;
+            }
+        }
+
+        themeToggle.addEventListener('change', () => {
+            const theme = themeToggle.checked ? 'light' : 'dark';
+            localStorage.setItem('theme', theme);
+            applyTheme(theme);
+        });
+
+        // Apply saved theme on page load
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        applyTheme(savedTheme);
+    </script>
+</body>
+</html>
